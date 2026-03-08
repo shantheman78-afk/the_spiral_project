@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Spiral QR Reader</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Orbitron:wght@400;700&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      color: #fff;
+      font-family: 'Space Mono', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.4rem;
+      letter-spacing: 0.3em;
+      color: #00ffcc;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+      text-shadow: 0 0 20px #00ffcc88;
+      animation: pulse 3s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { text-shadow: 0 0 20px #00ffcc88; }
+      50% { text-shadow: 0 0 40px #00ffcccc, 0 0 80px #00ffcc44; }
+    }
+
+    #camera-wrapper {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      border: 2px solid #00ffcc44;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    canvas { display: none; }
+
+    /* scanning line animation */
+    #scan-line {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #00ffcc, transparent);
+      animation: scan 2s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes scan {
+      0% { top: 0; }
+      100% { top: 100%; }
+    }
+
+    /* corner brackets */
+    .corner {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: #00ffcc;
+      border-style: solid;
+    }
+    .corner.tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+    .corner.tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+    .corner.bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+    .corner.br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+    #status {
+      margin-top: 1.2rem;
+      font-size: 0.75rem;
+      color: #00ffcc88;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    #result-box {
+      display: none;
+      margin-top: 1.2rem;
+      padding: 1rem 1.5rem;
+      border: 1px solid #00ffcc55;
+      border-radius: 4px;
+      background: #00ffcc0a;
+      max-width: 300px;
+      word-break: break-all;
+      text-align: center;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    #result-box .label {
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      color: #00ffcc;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    #result-box .data {
+      font-size: 0.85rem;
+      color: #fff;
+      line-height: 1.5;
+    }
+
+    #scan-again {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.6rem 1.5rem;
+      background: transparent;
+      border: 1px solid #00ffcc;
+      color: #00ffcc;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #scan-again:hover {
+      background: #00ffcc22;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Spiral QR Reader</h1>
+
+  <div id="camera-wrapper">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div id="scan-line"></div>
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+
+  <p id="status">Initialising camera...</p>
+
+  <div id="result-box">
+    <div class="label">QR Code Detected</div>
+    <div class="data" id="result-text"></div>
+  </div>
+
+  <button id="scan-again" onclick="resetScanner()">Scan Again</button>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const status = document.getElementById('status');
+    const resultBox = document.getElementById('result-box');
+    const resultText = document.getElementById('result-text');
+    const scanAgain = document.getElementById('scan-again');
+    const scanLine = document.getElementById('scan-line');
+
+    let scanning = true;
+
+    // Start camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        video.srcObject = stream;
+        video.play();
+        status.textContent = 'Point camera at a QR code';
+        requestAnimationFrame(tick);
+      })
+      .catch(err => {
+        status.textContent = 'Camera access denied';
+        console.error(err);
+      });
+
+    function tick() {
+      if (!scanning) return;
+
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if (code) {
+          scanning = false;
+          scanLine.style.display = 'none';
+          status.textContent = 'QR code found!';
+          resultText.textContent = code.data;
+          resultBox.style.display = 'block';
+          scanAgain.style.display = 'inline-block';
+          return;
+        }
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    function resetScanner() {
+      scanning = true;
+      scanLine.style.display = 'block';
+      resultBox.style.display = 'none';
+      scanAgain.style.display = 'none';
+      status.textContent = 'Point camera at a QR code';
+      requestAnimationFrame(tick);
+    }
+  </script>
+
+</body>
+</html>
