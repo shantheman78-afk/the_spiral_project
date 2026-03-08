@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>The Spiral Project</title>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { overflow: hidden; }
+    #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999; font-family: monospace; }
+    #title { position: absolute; top: 24px; width: 100%; text-align: center; color: #00ffcc; font-size: 0.65rem; letter-spacing: 0.35em; text-transform: uppercase; opacity: 0.8; }
+    #status { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.65); border: 1px solid #00ffcc55; color: #00ffcc; font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; padding: 10px 24px; border-radius: 2px; white-space: nowrap; }
+    #corner-tl, #corner-tr, #corner-bl, #corner-br { position: absolute; width: 24px; height: 24px; border-color: #00ffcc55; border-style: solid; }
+    #corner-tl { top: 16px; left: 16px; border-width: 1px 0 0 1px; }
+    #corner-tr { top: 16px; right: 16px; border-width: 1px 1px 0 0; }
+    #corner-bl { bottom: 16px; left: 16px; border-width: 0 0 1px 1px; }
+    #corner-br { bottom: 16px; right: 16px; border-width: 0 1px 1px 0; }
+  </style>
+</head>
+<body>
+
+<div id="ui">
+  <div id="title">The Spiral Project</div>
+  <div id="corner-tl"></div><div id="corner-tr"></div>
+  <div id="corner-bl"></div><div id="corner-br"></div>
+  <div id="status">Loading...</div>
+</div>
+
+<a-scene
+  mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no;"
+  color-space="sRGB"
+  renderer="colorManagement: true"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false"
+>
+  <a-assets>
+    <canvas id="spiralCanvas"></canvas>
+  </a-assets>
+
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+  <a-entity mindar-image-target="targetIndex: 0">
+
+    <!-- Fibonacci spiral drawn on canvas texture -->
+    <a-plane id="spiralPlane" width="1" height="1" position="0 0 0.001"
+      material="transparent: true; opacity: 1; side: double"
+      fibonacci-spiral
+    ></a-plane>
+
+    <!-- Golden ratio rings -->
+    <a-ring color="#00ffcc" radius-inner="0.395" radius-outer="0.41" opacity="0.6"
+      animation="property: rotation; to: 0 0 360; loop: true; dur: 12000; easing: linear">
+    </a-ring>
+
+    <a-ring color="#ffcc00" radius-inner="0.24" radius-outer="0.255" opacity="0.5"
+      animation="property: rotation; to: 0 0 -360; loop: true; dur: 8000; easing: linear"
+      animation__pulse="property: scale; from: 1 1 1; to: 1.08 1.08 1; dir: alternate; loop: true; dur: 1000; easing: easeInOutSine">
+    </a-ring>
+
+    <a-ring color="#ff6600" radius-inner="0.145" radius-outer="0.158" opacity="0.6"
+      animation="property: rotation; to: 0 0 360; loop: true; dur: 5000; easing: linear">
+    </a-ring>
+
+    <!-- Central glowing core -->
+    <a-sphere color="#00ffcc" radius="0.03" opacity="1"
+      animation="property: scale; from: 1 1 1; to: 2 2 2; dir: alternate; loop: true; dur: 600; easing: easeInOutSine"
+      animation__col="property: components.material.color; from: #00ffcc; to: #ffcc00; dir: alternate; loop: true; dur: 1200">
+    </a-sphere>
+
+    <!-- Firework particles - burst 1 (cyan) -->
+    <a-sphere color="#00ffcc" radius="0.012" position="0 0.42 0" opacity="0.95"
+      animation="property: position; from: 0 0 0; to: 0 0.42 0.1; loop: true; dur: 900; easing: easeOutQuad"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 900">
+    </a-sphere>
+    <a-sphere color="#00ffcc" radius="0.010" position="0.42 0 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: 0.42 0 0.1; loop: true; dur: 1100; easing: easeOutQuad; delay: 200"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 1100; delay: 200">
+    </a-sphere>
+    <a-sphere color="#00ffcc" radius="0.011" position="-0.3 0.3 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: -0.3 0.3 0.1; loop: true; dur: 800; easing: easeOutQuad; delay: 400"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 800; delay: 400">
+    </a-sphere>
+    <a-sphere color="#00ffcc" radius="0.009" position="0 -0.42 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: 0 -0.42 0.1; loop: true; dur: 1000; easing: easeOutQuad; delay: 100"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 1000; delay: 100">
+    </a-sphere>
+    <a-sphere color="#00ffcc" radius="0.010" position="-0.42 0 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: -0.42 0 0.05; loop: true; dur: 950; easing: easeOutQuad; delay: 300"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 950; delay: 300">
+    </a-sphere>
+    <a-sphere color="#00ffcc" radius="0.008" position="0.3 -0.3 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: 0.3 -0.3 0.08; loop: true; dur: 850; easing: easeOutQuad; delay: 500"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 850; delay: 500">
+    </a-sphere>
+
+    <!-- Firework particles - burst 2 (gold) -->
+    <a-sphere color="#ffcc00" radius="0.010" position="0.2 0.37 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: 0.2 0.37 0.12; loop: true; dur: 1300; easing: easeOutQuad; delay: 150"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 1300; delay: 150">
+    </a-sphere>
+    <a-sphere color="#ffcc00" radius="0.009" position="-0.37 0.2 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: -0.37 0.2 0.1; loop: true; dur: 1100; easing: easeOutQuad; delay: 350"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 1100; delay: 350">
+    </a-sphere>
+    <a-sphere color="#ffcc00" radius="0.011" position="0.37 -0.2 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: 0.37 -0.2 0.1; loop: true; dur: 1000; easing: easeOutQuad; delay: 600"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 1000; delay: 600">
+    </a-sphere>
+    <a-sphere color="#ffcc00" radius="0.008" position="-0.2 -0.37 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: -0.2 -0.37 0.08; loop: true; dur: 1200; easing: easeOutQuad; delay: 250"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 1200; delay: 250">
+    </a-sphere>
+
+    <!-- Firework particles - burst 3 (orange/red sparks) -->
+    <a-sphere color="#ff6600" radius="0.008" position="0.35 0.25 0.05" opacity="0.85"
+      animation="property: position; from: 0 0 0; to: 0.35 0.25 0.15; loop: true; dur: 700; easing: easeOutQuad; delay: 450"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 700; delay: 450">
+    </a-sphere>
+    <a-sphere color="#ff6600" radius="0.007" position="-0.25 0.35 0.05" opacity="0.85"
+      animation="property: position; from: 0 0 0; to: -0.25 0.35 0.12; loop: true; dur: 900; easing: easeOutQuad; delay: 550"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 900; delay: 550">
+    </a-sphere>
+    <a-sphere color="#ff3300" radius="0.009" position="0.1 0.44 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: 0.1 0.44 0.1; loop: true; dur: 1050; easing: easeOutQuad; delay: 700"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 1050; delay: 700">
+    </a-sphere>
+    <a-sphere color="#ff3300" radius="0.008" position="-0.44 -0.1 0" opacity="0.9"
+      animation="property: position; from: 0 0 0; to: -0.44 -0.1 0.08; loop: true; dur: 800; easing: easeOutQuad; delay: 800"
+      animation__fade="property: components.material.opacity; from: 1; to: 0; loop: true; dur: 800; delay: 800">
+    </a-sphere>
+
+    <!-- Fibonacci golden angle dots on the spiral path -->
+    <a-sphere color="#ffffff" radius="0.008" position="0.08 0.08 0.02" opacity="0.7"
+      animation__pulse="property: scale; from: 1 1 1; to: 1.8 1.8 1.8; dir: alternate; loop: true; dur: 600; delay: 0">
+    </a-sphere>
+    <a-sphere color="#ffffff" radius="0.007" position="-0.13 0.05 0.02" opacity="0.6"
+      animation__pulse="property: scale; from: 1 1 1; to: 1.8 1.8 1.8; dir: alternate; loop: true; dur: 600; delay: 100">
+    </a-sphere>
+    <a-sphere color="#ffffff" radius="0.007" position="-0.05 -0.15 0.02" opacity="0.6"
+      animation__pulse="property: scale; from: 1 1 1; to: 1.8 1.8 1.8; dir: alternate; loop: true; dur: 600; delay: 200">
+    </a-sphere>
+    <a-sphere color="#ffffff" radius="0.008" position="0.18 -0.1 0.02" opacity="0.7"
+      animation__pulse="property: scale; from: 1 1 1; to: 1.8 1.8 1.8; dir: alternate; loop: true; dur: 600; delay: 300">
+    </a-sphere>
+    <a-sphere color="#ffffff" radius="0.009" position="0.22 0.18 0.02" opacity="0.65"
+      animation__pulse="property: scale; from: 1 1 1; to: 1.8 1.8 1.8; dir: alternate; loop: true; dur: 600; delay: 400">
+    </a-sphere>
+
+  </a-entity>
+</a-scene>
+
+<script>
+  // Register fibonacci spiral component
+  AFRAME.registerComponent('fibonacci-spiral', {
+    init: function () {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      // Transparent background
+      ctx.clearRect(0, 0, 512, 512);
+
+      const cx = 256, cy = 256;
+
+      // Draw Fibonacci spiral
+      function drawSpiral(ctx, cx, cy, color, alpha, scale) {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = color;
+        ctx.beginPath();
+        let first = true;
+        for (let i = 0; i <= 800; i++) {
+          const t = (i / 800) * 5 * Math.PI * 2;
+          const r = 2.2 * Math.exp(0.15 * t) * scale;
+          const x = cx + Math.cos(t) * r;
+          const y = cy + Math.sin(t) * r;
+          if (first) { ctx.moveTo(x, y); first = false; }
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Multiple spiral layers
+      drawSpiral(ctx, cx, cy, '#00ffcc', 0.95, 1.0);
+      drawSpiral(ctx, cx, cy, '#00aaff', 0.6, 0.82);
+      drawSpiral(ctx, cx, cy, '#ffcc00', 0.4, 1.18);
+      drawSpiral(ctx, cx, cy, '#ffffff', 0.25, 0.65);
+
+      // Apply to plane
+      const texture = new THREE.CanvasTexture(canvas);
+      this.el.getObject3D('mesh').material.map = texture;
+      this.el.getObject3D('mesh').material.transparent = true;
+      this.el.getObject3D('mesh').material.needsUpdate = true;
+
+      // Slowly rotate the spiral plane
+      let angle = 0;
+      const tick = () => {
+        angle += 0.003;
+        this.el.object3D.rotation.z = angle;
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }
+  });
+
+  // UI events
+  const status = document.getElementById('status');
+  const scene = document.querySelector('a-scene');
+  scene.addEventListener('loaded', () => { status.textContent = 'Point camera at target'; });
+
+  const target = document.querySelector('[mindar-image-target]');
+  target.addEventListener('targetFound', () => { status.textContent = '✦ Spiral unlocked'; });
+  target.addEventListener('targetLost', () => { status.textContent = 'Point camera at target'; });
+</script>
+
+</body>
+</html>
