@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate"/>
+  <title>The Spiral Project</title>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { overflow: hidden; }
+    #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999; font-family: monospace; }
+    #title { position: absolute; top: 24px; width: 100%; text-align: center; color: #00bfff; font-size: 0.65rem; letter-spacing: 0.35em; text-transform: uppercase; opacity: 0.7; }
+    #status { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); border: 1px solid #00bfff33; color: #00bfff; font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; padding: 10px 24px; border-radius: 2px; white-space: nowrap; }
+    #corner-tl, #corner-tr, #corner-bl, #corner-br { position: absolute; width: 24px; height: 24px; border-color: #00bfff33; border-style: solid; }
+    #corner-tl { top: 16px; left: 16px; border-width: 1px 0 0 1px; }
+    #corner-tr { top: 16px; right: 16px; border-width: 1px 1px 0 0; }
+    #corner-bl { bottom: 16px; left: 16px; border-width: 0 0 1px 1px; }
+    #corner-br { bottom: 16px; right: 16px; border-width: 0 1px 1px 0; }
+  </style>
+</head>
+<body>
+<div id="ui">
+  <div id="title">✦ The Spiral Project ✦</div>
+  <div id="corner-tl"></div><div id="corner-tr"></div>
+  <div id="corner-bl"></div><div id="corner-br"></div>
+  <div id="status">Loading...</div>
+</div>
+
+<a-scene
+  mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no; filterMinCF: 0.001; filterBeta: 0.001; missTolerance: 10; warmupTolerance: 5"
+  color-space="sRGB"
+  renderer="colorManagement: true; alpha: true"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false"
+>
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+  <a-entity mindar-image-target="targetIndex: 0">
+    <a-plane
+      width="1" height="1"
+      position="0 0 0.001"
+      material="transparent: true; opacity: 1; side: double; alphaTest: 0.01"
+      fireworks-animation>
+    </a-plane>
+  </a-entity>
+</a-scene>
+
+<script>
+// ── Chaos helpers ────────────────────────────────────────────────────
+let noiseT = 0;
+function turbulence(x, y, t) {
+  const nx = Math.sin(x*0.008+t*0.7)*Math.cos(y*0.006+t*0.5)*0.18
+           + Math.sin(x*0.015-t*0.4)*0.09
+           + Math.cos(y*0.012+t*0.9)*0.07;
+  const ny = Math.cos(x*0.007+t*0.6)*Math.sin(y*0.009-t*0.3)*0.18
+           + Math.cos(x*0.013+t*0.5)*0.09
+           + Math.sin(y*0.011-t*0.8)*0.07;
+  return {nx, ny};
+}
+function logisticJitter(r, x) { return r * x * (1 - x); }
+
+const PALETTES = [
+  ['#ffffff','#c8e0ff','#7aadff','#4477ff'],
+  ['#ffffff','#ffd0e0','#ff7799','#cc2255'],
+  ['#ffffff','#fff0bb','#ffcc44','#ff8800'],
+  ['#ffffff','#ccffdd','#55ee88','#22aa44'],
+  ['#ffffff','#eeccff','#bb66ff','#7700cc'],
+  ['#ffffff','#aaddff','#ff99dd','#6655ff'],
+];
+function rndPalette() { return PALETTES[Math.floor(Math.random()*PALETTES.length)]; }
+
+AFRAME.registerComponent('fireworks-animation', {
+  init: function () {
+    const canvas = document.createElement('canvas');
+    const W = 512, H = 512;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    let rockets = [], bursts = [], popBursts = [];
+    let lastLaunch = 0, windX = 0, windTarget = 0.05, windTimer = 0;
+    let running = false;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    this.el.getObject3D('mesh').material.map = texture;
+    this.el.getObject3D('mesh').material.transparent = true;
+    this.el.getObject3D('mesh').material.needsUpdate = true;
+
+    const statusEl = document.getElementById('status');
+    this.el.sceneEl.addEventListener('loaded', () => { statusEl.textContent = 'Point camera at target'; });
+
+    const target = document.querySelector('[mindar-image-target]');
+    target.addEventListener('targetFound', () => {
+      running = true; rockets = []; bursts = []; popBursts = [];
+      lastLaunch = 0; noiseT = 0; windX = 0;
+      statusEl.textContent = '✦ Fireworks!';
+    });
+    target.addEventListener('targetLost', () => {
+      running = false;
+      ctx.clearRect(0, 0, W, H);
+      texture.needsUpdate = true;
+      statusEl.textContent = 'Point camera at target';
+    });
+
+    function makeRocket() {
+      const x = W * (0.1 + Math.random()*0.8);
+      const targetY = H * (0.05 + Math.random()*0.35);
+      return {
+        x, y: H * 0.95,
+        targetY,
+        vx: (Math.random()-0.5)*1.2 + windX*0.5,
+        vy: -(H*0.95 - targetY) / (28 + Math.random()*16),
+        palette: rndPalette(),
+        trail: [],
+        wobble: (Math.random()-0.5)*0.035,
+      };
+    }
+
+    function makeStreak(bx, by, palette, speedMult) {
+      const angle = Math.random()*Math.PI*2;
+      const speed = (Math.random()*7+2)*(speedMult||1);
+      const color = palette[Math.floor(Math.random()*palette.length)];
+      const r = 3.6 + Math.random()*0.3;
+      return {
+        x: bx, y: by,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+        gravity: 0.045 + Math.random()*0.035,
+        life: 1.0,
+        decay: Math.random()*0.007+0.004,
+        color,
+        bright: color==='#ffffff' || Math.random()>0.65,
+        history: [{x:bx,y:by}],
+        maxHistory: Math.floor(Math.random()*16)+8,
+        chaosSeed: Math.random(),
+        r, lx: 0.1+Math.random()*0.8,
+        turbStrength: Math.random()*0.4+0.05,
+        popChance: Math.random()>0.82 ? Math.random()*0.006+0.002 : 0,
+        popped: false,
+      };
+    }
+
+    function makeBurst(x, y) {
+      const palette = rndPalette();
+      const type = Math.floor(Math.random()*5);
+      const streaks = [];
+      const count = 28 + Math.floor(Math.random()*22);
+      for (let i = 0; i < count; i++) {
+        const s = makeStreak(x, y, palette, type===1 ? 0.6 : 1.0);
+        if (type===2) { s.vx *= i%2===0?1.7:0.45; s.vy *= i%2===0?1.7:0.45; }
+        streaks.push(s);
+      }
+      if (Math.random()>0.5) {
+        const p2 = rndPalette();
+        for (let i = 0; i < 14+Math.floor(Math.random()*10); i++) {
+          streaks.push(makeStreak(x, y, p2, 0.5));
+        }
+      }
+      return { streaks };
+    }
+
+    function drawStreak(s, fast) {
+      if (s.history.length < 2) return;
+      ctx.save();
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.beginPath();
+      ctx.moveTo(s.history[0].x, s.history[0].y);
+      for (let j=1; j<s.history.length; j++) ctx.lineTo(s.history[j].x, s.history[j].y);
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = fast ? 1.0 : (s.bright ? 1.6 : 1.0);
+      ctx.globalAlpha = s.life * (s.bright ? 0.9 : 0.7);
+      ctx.shadowBlur = s.bright ? 10 : 5;
+      ctx.shadowColor = s.color;
+      ctx.stroke();
+      if (s.bright && s.history.length > 3) {
+        const mid = Math.floor(s.history.length*0.55);
+        ctx.beginPath();
+        ctx.moveTo(s.history[mid].x, s.history[mid].y);
+        for (let j=mid+1; j<s.history.length; j++) ctx.lineTo(s.history[j].x, s.history[j].y);
+        ctx.strokeStyle='#ffffff'; ctx.lineWidth=0.7;
+        ctx.globalAlpha=s.life*0.85; ctx.shadowBlur=12; ctx.shadowColor='#ffffff';
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function updateStreak(s) {
+      const turb = turbulence(s.x, s.y, noiseT);
+      s.vx += turb.nx*s.turbStrength + windX*0.12;
+      s.vy += turb.ny*s.turbStrength*0.6;
+      s.lx = logisticJitter(s.r, s.lx);
+      s.vx += (s.lx-0.5)*0.04*(1-s.life);
+      s.vy += s.gravity;
+      s.vx *= 0.987; s.vy *= 0.987;
+      s.x += s.vx; s.y += s.vy;
+      s.life -= s.decay*(0.9+s.lx*0.2);
+    }
+
+    let lastTime = 0;
+    this.tick = function(time) {
+      if (!running) return;
+      noiseT += 0.008;
+
+      // Wind drift
+      windTimer++;
+      if (windTimer > 180+Math.random()*200) { windTarget=(Math.random()-0.5)*0.15; windTimer=0; }
+      windX += (windTarget-windX)*0.003;
+
+      // Fade
+      ctx.clearRect(0,0,W,H); // transparent
+
+      // Launch
+      const interval = 1400 + Math.random()*1200;
+      if (time - lastLaunch > interval) {
+        rockets.push(makeRocket());
+        if (Math.random()>0.72) rockets.push(makeRocket());
+        lastLaunch = time;
+      }
+
+      // Rockets
+      for (let i=rockets.length-1; i>=0; i--) {
+        const r = rockets[i];
+        r.trail.push({x:r.x, y:r.y});
+        if (r.trail.length>10) r.trail.shift();
+        for (let j=1; j<r.trail.length; j++) {
+          ctx.save();
+          ctx.globalAlpha=(j/r.trail.length)*0.8;
+          ctx.strokeStyle='#ffffff'; ctx.lineWidth=j<3?1:2;
+          ctx.shadowBlur=6; ctx.shadowColor='#aaddff'; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(r.trail[j-1].x,r.trail[j-1].y); ctx.lineTo(r.trail[j].x,r.trail[j].y);
+          ctx.stroke(); ctx.restore();
+        }
+        r.vx += r.wobble + windX*0.3;
+        r.x += r.vx; r.y += r.vy;
+        if (r.y <= r.targetY) {
+          bursts.push(makeBurst(r.x, r.y));
+          rockets.splice(i,1);
+          ctx.save();
+          const flash = ctx.createRadialGradient(r.x,r.y,0,r.x,r.y,30);
+          flash.addColorStop(0,'rgba(255,255,255,0.8)');
+          flash.addColorStop(1,'rgba(255,255,255,0)');
+          ctx.fillStyle=flash; ctx.fillRect(0,0,W,H);
+          ctx.restore();
+        }
+      }
+
+      // Main bursts
+      for (let b=bursts.length-1; b>=0; b--) {
+        const burst = bursts[b]; let alive=false;
+        for (let i=burst.streaks.length-1; i>=0; i--) {
+          const s=burst.streaks[i];
+          if (s.life<=0) { burst.streaks.splice(i,1); continue; }
+          alive=true;
+          s.history.push({x:s.x,y:s.y});
+          if (s.history.length>s.maxHistory) s.history.shift();
+          drawStreak(s, false);
+          // Secondary pops
+          if (s.popChance>0 && !s.popped && s.life<0.65 && s.life>0.25) {
+            if (Math.random()<s.popChance) {
+              s.popped=true;
+              const popStreaks=[];
+              for (let p=0; p<Math.floor(Math.random()*7)+8; p++) {
+                const ps=makeStreak(s.x,s.y,[s.color,'#ffffff'],0.35+Math.random()*0.3);
+                ps.gravity*=0.5; ps.maxHistory=5; ps.decay*=2.2; ps.turbStrength*=0.3;
+                popStreaks.push(ps);
+              }
+              popBursts.push({streaks:popStreaks});
+            }
+          }
+          updateStreak(s);
+        }
+        if (!alive) bursts.splice(b,1);
+      }
+
+      // Pop bursts
+      for (let b=popBursts.length-1; b>=0; b--) {
+        const pop=popBursts[b]; let alive=false;
+        for (let i=pop.streaks.length-1; i>=0; i--) {
+          const s=pop.streaks[i];
+          if (s.life<=0) { pop.streaks.splice(i,1); continue; }
+          alive=true;
+          s.history.push({x:s.x,y:s.y});
+          if (s.history.length>s.maxHistory) s.history.shift();
+          drawStreak(s, true);
+          const turb=turbulence(s.x,s.y,noiseT);
+          s.vx+=turb.nx*s.turbStrength+windX*0.08;
+          s.vy+=turb.ny*s.turbStrength*0.5+s.gravity;
+          s.vx*=0.987; s.vy*=0.987;
+          s.x+=s.vx; s.y+=s.vy;
+          s.life-=s.decay;
+        }
+        if (!alive) popBursts.splice(b,1);
+      }
+
+      texture.needsUpdate = true;
+    };
+  }
+});
+</script>
+</body>
+</html>
